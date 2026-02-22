@@ -1,0 +1,77 @@
+!pip install opencv-python opencv-contrib-python
+
+import cv2
+import numpy as np
+from google.colab.patches import cv2_imshow
+from google.colab import files
+from IPython.display import clear_output
+
+print("Upload a museum artwork image (to simulate the captured image):")
+uploaded = files.upload()
+clear_output()
+
+image_path = list(uploaded.keys())[0]
+image = cv2.imread(image_path)
+image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+cv2_imshow(image)
+
+
+# Simulated database: just one artwork image and its AR info
+print("Upload a reference image of an artwork from the museum:")
+ref_upload = files.upload()
+clear_output()
+
+ref_path = list(ref_upload.keys())[0]
+ref_img = cv2.imread(ref_path)
+ref_gray = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+
+# Add info related to the artwork
+artwork_info = {
+    "title": "Mona Lisa",
+    "artist": "Leonardo da Vinci",
+    "year": "1503–1506",
+    "description": "One of the most famous portraits in the world, known for the subject's enigmatic expression."
+}
+
+
+# Create ORB detector and match descriptors
+orb = cv2.ORB_create(nfeatures=1000)
+
+# Compute keypoints and descriptors
+kp1, des1 = orb.detectAndCompute(ref_gray, None)
+kp2, des2 = orb.detectAndCompute(image_gray, None)
+
+# Brute Force Matcher with Hamming distance
+bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+matches = bf.match(des1, des2)
+matches = sorted(matches, key=lambda x: x.distance)
+
+# Draw top matches
+match_img = cv2.drawMatches(ref_img, kp1, image, kp2, matches[:20], None, flags=2)
+cv2_imshow(match_img)
+
+
+# Set threshold for number of matches
+if len(matches) > 15:
+    print("✅ Artwork recognized! Showing AR overlay...")
+
+    # Overlay AR info onto the original image
+    ar_image = image.copy()
+
+    # Add semi-transparent rectangle
+    overlay = ar_image.copy()
+    cv2.rectangle(overlay, (30, 30), (450, 230), (0, 0, 0), -1)
+    alpha = 0.6
+    cv2.addWeighted(overlay, alpha, ar_image, 1 - alpha, 0, ar_image)
+
+    # Add text info
+    cv2.putText(ar_image, f"Title: {artwork_info['title']}", (40, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(ar_image, f"Artist: {artwork_info['artist']}", (40, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 255, 200), 2)
+    cv2.putText(ar_image, f"Year: {artwork_info['year']}", (40, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 200), 2)
+    cv2.putText(ar_image, "Tap for more", (40, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 200), 1)
+
+    cv2_imshow(ar_image)
+
+else:
+    print("❌ Artwork not recognized. Try another one.")
